@@ -213,9 +213,15 @@
         
         // ከዚህ በፊት የነበረውን localhost በ SERVER_URL እንተካዋለን
         let socket = new WebSocket(SERVER_URL);
-
-        socket.onopen = function(e) {
+socket.onopen = function(e) {
             console.log("🚀 ከቢንጎ ሰርቨር ጋር በስኬት ተገናኝተናል!");
+            
+            // 🔑 Render ሰርቨሩን በሃይል እንዳይዘጋው በየ 20 ሰከንዱ "PING" ምልክት እንልካለን
+            setInterval(() => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: 'PING' }));
+                }
+            }, 20000); 
         };
 
         socket.onmessage = function(event) {
