@@ -208,112 +208,93 @@
     </div>
 
     <script>
-        // --- 🌐 ከ Node.js WebSocket ሰርቨር ጋር ማገናኛ ---
-        const socket = new WebSocket(`ws://${window.location.host}`);
+        // 🔑 1) የሰርቨርህን የኢንተርኔት አድራሻ እዚህ ጋር አስገባ (https ከሆነ wss:// ይሆናል)
+        const SERVER_URL = "wss://bingo-server-7p83.onrender.com"; 
+        
+        // ከዚህ በፊት የነበረውን localhost በ SERVER_URL እንተካዋለን
+        let socket = new WebSocket(SERVER_URL);
+
+        socket.onopen = function(e) {
+            console.log("🚀 ከቢንጎ ሰርቨር ጋር በስኬት ተገናኝተናል!");
+        };
 
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
 
-            // ሀ) ከሰርቨር በየሴኮንዱ የሚመጣውን ሰዓት መቀበል
-            if (data.type === 'LOBBY_TICK') {
-                document.getElementById('lobby-timer').innerText = data.timeLeft;
-            }
-
-            // ለ) ሰርቨሩ ላይ ታይመሩ 0 ሲደርስ ወደ ጨዋታ ገፅ መሻገሪያ
-            if (data.type === 'START_GAME_PAGE') {
-                switchToGame();
-            }
-
-            if (data.type === 'NEW_NUMBER') {
-                handleIncomingNumber(data.number, data.letter);
-            }
-            
-            if (data.type === 'GAME_OVER') {
-                console.log("📢 ከሰርቨር የጌም ኦቨር መልዕክት ደረሰ! አሸናፊ ካርቴላ፦", data.winnerCardId);
-                // ለሌሎች ተጫዋቾች ገፅ 3ን እንዲከፍት መጥራት
-                showWinnerScreen(data.winnerCardId, data.winnerData);
-            }
-
-            if (data.type === 'RESET_ROUND') {
-                console.log("🔄 ሰርቨሩ አዲስ ዙር አዟል፣ ወደ ሎቢ እየተመለስን ነው...");
-                resetGameToLobby();
-            }
-            
-            if (data.type === 'GAME_OVER_NO_WINNER') {
-                document.getElementById('current-display').innerText = " አልቋል ";
-            }
-            
-            if (data.type === 'SYNC_GAME') {
-                calledNums = data.calledNums;
-                const myId = document.getElementById('tg-userid').innerText || "123456789";
-
-                // ከሰርቨር የመጡትን የኛን የድሮ ካርቴላዎች መልሰን መጫን
-                if (data.playerSelections && data.playerSelections[myId]) {
-                    selectedCards = data.playerSelections[myId];
-                    document.getElementById('selected-count-display').innerText = `${selectedCards.length}/4`;
+            if (data.type === 'LOBBY_STATE') {
+                // ገፅ 1 (Lobby) መረጃዎችን ማዘመኛ
+                document.getElementById('online-count').innerText = data.onlineCount || 0;
+                document.getElementById('pool-display').innerText = (data.prizePool || 0) + " ETB";
+                
+                const timerEl = document.getElementById('lobby-timer');
+                if (data.timeLeft > 0) {
+                    timerEl.innerText = `ጨዋታው ለመጀመር ${data.timeLeft} ሰከንድ ቀረው`;
+                } else {
+                    timerEl.innerText = "ተጫዋቾች እየተጠባበቁ ነው...";
                 }
+            }
 
-                if (data.gameState === 'LOBBY') {
-                    document.getElementById('lobby-timer').innerText = data.lobbyTimeLeft;
-                    updateLobbyPreview();
-                }
-
-                // 🔑 ጨዋታው ከጀመረ በኋላ ሪፍሬሽ ከተደረገ ገጹን መልሶ በንጽህና መገንባት
-                if (data.gameState === 'PLAYING') {
+            if (data.gameState === 'PLAYING') {
+                // ጨዋታው ሲጀመር ወደ ገፅ 2 መሸጋገሪያ
+                if (!document.getElementById('game-page').classList.contains('active-page')) {
                     document.getElementById('dashboard-page').classList.remove('active-page');
-                    document.getElementById('lobby-page').classList.remove('active-page');
                     document.getElementById('game-page').classList.add('active-page');
-                    
-                    // 1) የጨዋታውን ሰሌዳ እና የኛን ካርቴላዎች ማዘጋጀት
-                    initGameBoard();
+                    initGameBoard(); 
+                }
 
-                    // 2) እስካሁን በሰርቨር የተጠሩትን ቁጥሮች በሙሉ መልሶ ማብራት እና መምታት (Hit ማድረግ)
-                    const tempCalled = [...calledNums]; // ኮፒ ማድረግ
-                    calledNums = []; // ለጊዜው ባዶ ማድረግ handleIncomingNumber እንዲሰራው
-                    
-                    document.getElementById('history-box').innerHTML = ""; // የታሪክ ሳጥንን ማጽዳት
+                const tempCalled = [...calledNums];
+                calledNums = [];
+                document.getElementById('history-box').innerHTML = "";
 
-                    tempCalled.forEach(num => {
-                        let L = num <= 15 ? 'B' : num <= 30 ? 'I' : num <= 45 ? 'N' : num <= 60 ? 'G' : 'O';
-                        
-                        // ቁጥሩን በቦርዱ እና በካርቴላዎች ላይ መልሶ መምታት
-                        document.getElementById('call-count').innerText = calledNums.length + 1;
-                        calledNums.push(num);
+                tempCalled.forEach(num => {
+                    let L = num <= 15 ? 'B' : num <= 30 ? 'I' : num <= 45 ? 'N' : num <= 60 ? 'G' : 'O';
+                    document.getElementById('call-count').innerText = calledNums.length + 1;
+                    calledNums.push(num);
 
-                        const boardBox = document.getElementById(`board-num-${num}`);
-                        if (boardBox) {
-                            boardBox.classList.add('marked');
-                            boardBox.style.backgroundColor = colors[L];
-                        }
-
-                        // የታሪክ ሳጥን ላይ መደርደር
-                        const histBox = document.getElementById('history-box');
-                        const dot = document.createElement('div');
-                        dot.className = "history-dot text-white font-bold shadow-md";
-                        dot.style.backgroundColor = colors[L];
-                        dot.innerText = num;
-                        histBox.insertBefore(dot, histBox.firstChild);
-
-                        // በካርቴላዎች ላይ መምታት
-                        activeCardsData.forEach(card => {
-                            card.cells.forEach(cell => {
-                                if (cell.value === num) {
-                                    cell.element.classList.add('hit');
-                                }
-                            });
-                        });
-                    });
-
-                    // 3) የመጨረሻውን የተጠራ ቁጥር ስክሪን ላይ ማሳየት
-                    if (calledNums.length > 0) {
-                        let lastNum = calledNums[calledNums.length - 1];
-                        let lastL = lastNum <= 15 ? 'B' : lastNum <= 30 ? 'I' : lastNum <= 45 ? 'N' : lastNum <= 60 ? 'G' : 'O';
-                        const curDisp = document.getElementById('current-display');
-                        curDisp.innerText = `${lastL}-${lastNum}`;
-                        curDisp.style.color = colors[lastL];
+                    const boardBox = document.getElementById(`board-num-${num}`);
+                    if (boardBox) {
+                        boardBox.classList.add('marked');
+                        boardBox.style.backgroundColor = colors[L];
                     }
+
+                    const histBox = document.getElementById('history-box');
+                    const dot = document.createElement('div');
+                    dot.className = "history-dot text-white font-bold shadow-md";
+                    dot.style.backgroundColor = colors[L];
+                    dot.innerText = num;
+                    histBox.insertBefore(dot, histBox.firstChild);
+
+                    // በእያንዳንዱ አዲስ ጥሪ የእኛ ካርቴላዎች ላይ ቁጥሩ ካለ ማርክ ማድረግ
+                    activeCardsData.forEach(card => {
+                        card.cells.forEach(cell => {
+                            if (cell.value === num) {
+                                cell.element.classList.add('hit');
+                            }
+                        });
+                        checkBingoWinners(card); // አሸናፊ መኖሩን መፈተሽ
+                    });
+                });
+
+                if (calledNums.length > 0) {
+                    let lastNum = calledNums[calledNums.length - 1];
+                    let lastL = lastNum <= 15 ? 'B' : lastNum <= 30 ? 'I' : lastNum <= 45 ? 'N' : lastNum <= 60 ? 'G' : 'O';
+                    const curDisp = document.getElementById('current-display');
+                    curDisp.innerText = `${lastL}-${lastNum}`;
+                    curDisp.style.color = colors[lastL];
                 }
             }
+
+            if (data.type === 'GAME_OVER') {
+                console.log("📢 ጨዋታው አልቋል! አሸናፊው ካርቴላ፦", data.winnerCardId);
+                showWinnerScreen(data.winnerCardId);
+            }
+        };
+
+        socket.onclose = function(event) {
+            console.log("⚠️ ከሰርቨር ጋር ያለው ግንኙነት ተቋርጧል፣ በድጋሚ ለመገናኘት እየሞከርን ነው...");
+            setTimeout(() => {
+                socket = new WebSocket(SERVER_URL);
+            }, 3000);
         };
 
         // እኛ ስናሸንፍ ለሰርቨሩ መልዕክት መላኪያ ህግ
