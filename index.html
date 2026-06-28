@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cash Bingo - Premium Fixed Layout</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #1a1c2c; color: white; font-family: sans-serif; height: 100vh; margin: 0; overflow: hidden; }
+        /* የተስተካከለው አዲስ የገጽ ስታይል */
+        .page { display: none !important; height: 100vh; flex-direction: column; }
+        .active-page { display: flex !important; }
+        /* ገፅ 3 መሃል ላይ እንዲቀመጥ */
+        #winner-page.active-page { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .custom-scroll::-webkit-scrollbar { width: 0px; }
+        
+        /* Lobby Card Styles */
+        .card-item { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background-color: #3e4363; color: #d1d5db; font-weight: bold; font-size: 13px; cursor: pointer; border: 1px solid #4b5563; transition: all 0.2s; border-radius: 2px; }
+        .card-item.selected { background-color: #e64a19 !important; color: white !important; border-color: #fb923c !important; transform: scale(0.9); }
+
+        /* Game Board Styles - 1-75 ሙሉ ለሙሉ እንዲታይ 100% ቁመት እንዲይዝ ተደርጓል */
+        .number-box { aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; border-radius: 3px; background-color: #3e4363; border: 0.5px solid #2d3250; }
+        .marked { background-color: #22c55e !important; box-shadow: inset 0 0 4px rgba(0,0,0,0.5); }
+        .current-anim { border: 1.5px solid #fb923c; transform: scale(1.05); z-index: 10; }
+        
+        /* የተጫዋች ካርቴላዎች መጠን እንዲያንስ እና ይበልጥ እንዲያምር የተደረገ ስታይል */
+        .player-card { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.5px; background: linear-gradient(135deg, #2d3250, #141625); padding: 4px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #3e4363; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .card-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: bold; background: #1a1c2c; color: #9ca3af; border-radius: 2px; transition: all 0.3s ease; }
+        
+        /* ቁጥር ሲመታ (Hit ሲሆን) የሚኖረው ውብ አኒሜሽን እና ከለር */
+        .hit { background: linear-gradient(135deg, #e64a19, #ff6b4a) !important; color: white !important; font-weight: 900; box-shadow: 0 0 4px #fb923c; transform: scale(0.95); }
+        
+        /* የFREE ሳጥን ልዩ ውበት */
+        .free-style { background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important; color: white !important; font-size: 7px !important; font-weight: 900; }
+        
+        .history-mini { background: #24273d; border-radius: 12px; padding: 2px 6px; display: flex; gap: 4px; overflow-x: auto; height: 28px; align-items: center; width: 140px; }
+        .history-dot { min-width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; flex-shrink: 0; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+    
+    <div id="dashboard-page" class="page active-page bg-[#141625] p-4 flex flex-col justify-between h-screen">
+        <div class="text-center mt-4">
+            <h1 class="text-3xl font-black text-orange-400 italic tracking-wider drop-shadow-lg">CASH BINGO</h1>
+            <p class="text-xs text-gray-400 mt-1">ሰላም <span id="tg-username" class="text-orange-400 font-bold">ተጫዋች</span>! ወደ አዲሱ የዲጂታል ቢንጎ ዓለም እንኳን ደህና መጡ</p>
+            <p class="text-[10px] text-gray-500 font-mono mt-0.5">ID: <span id="tg-userid">Loading...</span></p>
+        </div><div class="bg-[#24273d] border border-gray-700 rounded-2xl p-5 shadow-2xl mx-auto w-full max-w-sm">
+            <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold">የአሁኑ ቀሪ ሂሳብዎ</p>
+            <div class="flex items-baseline justify-between mt-2 border-b border-gray-700 pb-4">
+                <span id="user-balance-display" class="text-4xl font-black text-green-400">0.00</span>
+                <span class="text-sm font-bold text-gray-400">የኢትዮጵያ ብር (ETB)</span>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3 mt-4">
+                <button onclick="toggleDepositModal()" class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-black text-xs py-3 rounded-xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-1 cursor-pointer">
+                    <span>💰</span> ብር አስገባ
+                </button>
+                <button onclick="toggleWithdrawModal()" class="bg-[#3e4363] hover:bg-[#4c527a] text-white font-black text-xs py-3 rounded-xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-1 cursor-pointer">
+                    <span>💸</span> ብር አውጣ
+                </button>
+            </div>
+        </div>
+
+        <div class="w-full max-w-sm mx-auto mb-6">
+            <button onclick="switchToLobby()" class="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-black text-base py-4 rounded-2xl shadow-xl transition transform active:scale-95 flex items-center justify-center gap-2 animate-pulse cursor-pointer">
+                <span>🎮</span> ጨዋታውን ተቀላቀል
+            </button>
+        </div>
+    </div>
+
+    <div id="lobby-page" class="page">
+        <div class="p-3 bg-[#24273d] flex items-center justify-between border-b border-gray-700">
+            <h1 class="text-lg font-bold text-orange-400">Cash Bingo</h1>
+            <div class="flex items-center gap-2">
+                <button onclick="toggleDepositModal()" class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-black font-extrabold text-[11px] px-3 py-1.5 rounded shadow transition transform active:scale-95 flex items-center gap-1 cursor-pointer">
+                    <span>💰</span> ብር አስገባ
+                </button>
+                <button onclick="location.reload()" class="bg-[#3e4363] px-3 py-1 rounded text-xs italic">↻ Restart</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-1 p-2 bg-[#1a1c2c]">
+            <div class="bg-[#2a2e4a] p-2 rounded text-center border border-gray-700">
+                <p class="text-[9px] text-gray-400 uppercase">Main</p>
+                <p class="font-bold text-sm">6</p>
+            </div>
+            <div class="bg-[#2a2e4a] p-2 rounded text-center border border-gray-700">
+                <p class="text-[9px] text-gray-400 uppercase">Play</p>
+                <p class="font-bold text-sm">0</p>
+            </div>
+            <div class="bg-[#2a2e4a] p-2 rounded text-center border border-gray-700">
+                <p class="text-[9px] text-gray-400 uppercase">Selected</p>
+                <p id="selected-count-display" class="font-bold text-sm text-orange-400">0/4</p>
+            </div>
+            <div class="bg-[#2a2e4a] p-2 rounded flex items-center justify-center border border-gray-700 border-yellow-600">
+                <p class="font-bold text-yellow-400 text-xl"><span id="lobby-timer">15</span><span class="text-xs text-white ml-0.5">s</span></p>
+            </div>
+        </div>
+
+        <div id="lobby-scroll-container" class="flex-1 overflow-y-auto p-2 custom-scroll bg-[#141625]">
+            <p class="text-[11px] text-gray-400 mb-1 ml-1 font-bold">ካርቴላ ይምረጡ (ከ 1 - 600)</p><div id="card-container" class="grid grid-cols-8 gap-1.5 p-1 mb-6"></div>
+            
+            <div class="bg-[#1a1c2c] p-3 rounded-lg border border-gray-800">
+                <p class="text-[11px] text-orange-400 font-bold mb-2 border-b border-gray-800 pb-1">የመረጧቸው ካርቴላዎች ቅድመ-እይታ</p>
+                <div id="lobby-preview-area" class="flex flex-col gap-2">
+                    <p id="no-cards-msg" class="text-xs text-gray-500 italic text-center py-4">እባክህ ከላይ ካርቴላ ስትመርጥ እዚህ ጋር ዝርዝሩ ይታያል</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="depositModal" class="fixed inset-0 bg-black/80 flex items-center justify-center hidden z-50 p-4 backdrop-blur-sm">
+        <div class="bg-[#24273d] border border-gray-700 rounded-2xl max-w-sm w-full p-5 text-white shadow-2xl relative">
+            <button onclick="toggleDepositModal()" class="absolute top-3 right-3 text-gray-400 hover:text-white text-xl font-bold cursor-pointer">&times;</button>
+            <h2 class="text-xl font-black text-center text-yellow-500 mb-4">💰 ሂሳብዎን ይሙሉ (Deposit)</h2>
+            
+            <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-400 mb-2">የባንክ አማራጭ ይምረጡ፦</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="selectBank('Telebirr')" id="btn-Telebirr" class="py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition hover:border-yellow-500 cursor-pointer">📱 ቴሌብር</button>
+                    <button onclick="selectBank('CBE')" id="btn-CBE" class="py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition hover:border-yellow-500 cursor-pointer">🏦 ንግድ ባንክ (CBE)</button>
+                </div>
+            </div><div id="accountDisplayBox" class="mb-4 p-3 bg-gray-900/50 border border-gray-700 rounded-xl hidden">
+                <p class="text-[10px] text-gray-400">⚠️ በዚህ አካውንት ላይ ብሩን ያስተላልፉ፦</p>
+                <p id="adminAccountDetails" class="text-xs font-mono font-bold text-yellow-400 mt-1.5 bg-black/40 p-2 rounded-lg border border-gray-800 select-all text-center"></p>
+            </div>
+
+            <div id="depositFormFields" class="hidden space-y-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">ያስተላለፉት የብር መጠን፦</label>
+                    <input type="number" id="depositAmount" placeholder="ለምሳሌ፦ 100" class="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yellow-500 font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">ከባንኩ የደረሰዎት SMS (Copy-Paste)፦</label>
+                    <textarea id="depositSMS" rows="3" placeholder="ከባንክ የደረሰዎትን ሙሉ መልዕክት እዚህ ላይ ይለጥፉት..." class="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yellow-500 font-mono"></textarea>
+                </div>
+                <button onclick="handleDepositSubmit()" class="w-full bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-black font-black py-2.5 rounded-xl text-xs shadow-lg transition transform active:scale-95 mt-1 cursor-pointer">🔄 ክፍያዬን አረጋግጥ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="withdrawModal" class="fixed inset-0 bg-black/80 flex items-center justify-center hidden z-50 p-4 backdrop-blur-sm">
+        <div class="bg-[#24273d] border border-gray-700 rounded-2xl max-w-sm w-full p-5 text-white shadow-2xl relative">
+            <button onclick="toggleWithdrawModal()" class="absolute top-3 right-3 text-gray-400 hover:text-white text-xl font-bold cursor-pointer">&times;</button>
+            <h2 class="text-xl font-black text-center text-orange-400 mb-4">💸 ብር ማውጫ (Withdraw)</h2>
+            <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-400 mb-2">የመቀበያ ባንክ ይምረጡ፦</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="selectWithdrawBank('Telebirr')" id="btn-w-Telebirr" class="py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition hover:border-orange-500 cursor-pointer">📱 ቴሌብር</button>
+                    <button onclick="selectWithdrawBank('CBE')" id="btn-w-CBE" class="py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition hover:border-orange-500 cursor-pointer">🏦 ንግድ ባንክ (CBE)</button>
+                </div>
+            </div>
+            <div id="withdrawFormFields" class="hidden space-y-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">የሒሳብ/ስልክ ቁጥርዎ፦</label>
+                    <input type="text" id="withdrawAccount" placeholder="ለምሳሌ፦ 09xxxxxxxx" class="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">የሚወጣው የብር መጠን፦</label>
+                    <input type="number" id="withdrawAmount" placeholder="ከ 50 ብር ጀምሮ" class="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 font-bold">
+                </div>
+                <button onclick="handleWithdrawSubmit()" class="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-black py-2.5 rounded-xl text-xs shadow-lg transition transform active:scale-95 mt-1 cursor-pointer">🚀 🚀 ፎርሙን ላክ</button>
+            </div>
+        </div>
+    </div><div id="game-page" class="page overflow-hidden">
+        <div class="flex items-center justify-between bg-[#24273d] px-2 py-1.5 border-b border-gray-700 top-0 z-50">
+            <button onclick="location.reload()" class="text-red-500 font-bold text-lg">✖️</button>
+            <div class="flex flex-1 justify-around items-center text-[9px] px-2 font-medium">
+                <div class="text-center text-gray-400">ID<br><b class="text-white">ZMN1</b></div>
+                <div class="text-center text-gray-400">ተጫዋቾች<br><b class="text-white">397</b></div>
+                <div class="text-center text-orange-400">ውርርድ<br><b>10</b></div>
+                <div class="text-center text-green-400">ደራሽ<br><b>3176</b></div>
+                <div class="text-center text-gray-400">ጥሪ<br><b id="call-count" class="text-blue-400">0</b></div>
+            </div>
+            <button onclick="location.reload()" class="bg-blue-600 w-8 h-8 rounded-full flex items-center justify-center text-white text-sm">↻</button>
+        </div>
+
+        <div class="flex justify-end items-center gap-2 p-1 bg-[#1a1c2c]">
+            <div id="history-box" class="history-mini custom-scroll"></div>
+        </div>
+
+        <div class="flex flex-1 gap-1 overflow-hidden p-1 bg-[#141625]">
+            <div class="w-[52%] flex flex-col overflow-hidden bg-[#141625] p-1 rounded-lg border border-gray-800">
+                <div class="grid grid-cols-5 gap-1 mb-1 text-center font-bold text-xs">
+                    <div class="text-blue-500">B</div><div class="text-red-500">I</div><div class="text-green-500">N</div><div class="text-orange-500">G</div><div class="text-purple-500">O</div>
+                </div>
+                <div id="main-board" class="grid grid-cols-5 gap-1 flex-1 overflow-hidden"></div>
+            </div>
+            
+            <div class="flex-1 flex flex-col overflow-hidden">
+                <div class="bg-[#24273d] py-2 rounded-lg border border-orange-500 text-center shadow-lg mb-1.5 flex-shrink-0">
+                    <span class="text-[8px] text-gray-400 uppercase font-bold tracking-wider">Now Calling</span>
+                    <div id="current-display" class="text-2xl font-black text-orange-500 italic leading-none">--</div>
+                </div>
+                <div id="cards-scroll-area" class="flex-1 overflow-y-auto custom-scroll flex flex-col pt-0 px-0.5"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="winner-page" class="page bg-[#141625] items-center justify-center p-4">
+        <div class="text-center w-full max-w-sm">
+            <h2 class="text-2xl font-black text-yellow-400 mb-2 tracking-wide italic animate-bounce">BINGO! 🎉</h2>
+            <p class="text-xs text-gray-400 mb-4 font-bold">አሸናፊ ካርቴላ</p>
+            <div id="winner-card-display"></div>
+            <p class="text-[10px] text-gray-500 italic mt-4">በራስ-ሰር ወደ ሎቢ እየተመለሰ ነው...</p>
+        </div>
+    </div>
+
+    <script>
+        // --- 🌐 ከ Node.js WebSocket ሰርቨር ጋር ማገናኛ ---
+        const socket = new WebSocket(`ws://${window.location.host}`);
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            // ሀ) ከሰርቨር በየሴኮንዱ የሚመጣውን ሰዓት መቀበል
+            if (data.type === 'LOBBY_TICK') {
+                document.getElementById('lobby-timer').innerText = data.timeLeft;
+            }
+
+            // ለ) ሰርቨሩ ላይ ታይመሩ 0 ሲደርስ ወደ ጨዋታ ገፅ መሻገሪያ
+            if (data.type === 'START_GAME_PAGE') {
+                switchToGame();
+            }
+
+            if (data.type === 'NEW_NUMBER') {
+                handleIncomingNumber(data.number, data.letter);
+            }
+            
+            if (data.type === 'GAME_OVER') {
+                console.log("📢 ከሰርቨር የጌም ኦቨር መልዕክት ደረሰ! አሸናፊ ካርቴላ፦", data.winnerCardId);
+                // ለሌሎች ተጫዋቾች ገፅ 3ን እንዲከፍት መጥራት
+                showWinnerScreen(data.winnerCardId, data.winnerData);
+            }
+
+            if (data.type === 'RESET_ROUND') {
+                console.log("🔄 ሰርቨሩ አዲስ ዙር አዟል፣ ወደ ሎቢ እየተመለስን ነው...");
+                resetGameToLobby();
+            }
+            
+            if (data.type === 'GAME_OVER_NO_WINNER') {
+                document.getElementById('current-display').innerText = " አልቋል ";
+            }
+            
+            if (data.type === 'SYNC_GAME') {
+                calledNums = data.calledNums;
+                const myId = document.getElementById('tg-userid').innerText || "123456789";
+
+                // ከሰርቨር የመጡትን የኛን የድሮ ካርቴላዎች መልሰን መጫን
+                if (data.playerSelections && data.playerSelections[myId]) {
+                    selectedCards = data.playerSelections[myId];
+                    document.getElementById('selected-count-display').innerText = `${selectedCards.length}/4`;
+                }
+
+                if (data.gameState === 'LOBBY') {
+                    document.getElementById('lobby-timer').innerText = data.lobbyTimeLeft;
+                    updateLobbyPreview();
+                }
+
+                // 🔑 ጨዋታው ከጀመረ በኋላ ሪፍሬሽ ከተደረገ ገጹን መልሶ በንጽህና መገንባት
+                if (data.gameState === 'PLAYING') {
+                    document.getElementById('dashboard-page').classList.remove('active-page');
+                    document.getElementById('lobby-page').classList.remove('active-page');
+                    document.getElementById('game-page').classList.add('active-page');
+                    
+                    // 1) የጨዋታውን ሰሌዳ እና የኛን ካርቴላዎች ማዘጋጀት
+                    initGameBoard();
+
+                    // 2) እስካሁን በሰርቨር የተጠሩትን ቁጥሮች በሙሉ መልሶ ማብራት እና መምታት (Hit ማድረግ)
+                    const tempCalled = [...calledNums]; // ኮፒ ማድረግ
+                    calledNums = []; // ለጊዜው ባዶ ማድረግ handleIncomingNumber እንዲሰራው
+                    
+                    document.getElementById('history-box').innerHTML = ""; // የታሪክ ሳጥንን ማጽዳት
+
+                    tempCalled.forEach(num => {
+                        let L = num <= 15 ? 'B' : num <= 30 ? 'I' : num <= 45 ? 'N' : num <= 60 ? 'G' : 'O';
+                        
+                        // ቁጥሩን በቦርዱ እና በካርቴላዎች ላይ መልሶ መምታት
+                        document.getElementById('call-count').innerText = calledNums.length + 1;
+                        calledNums.push(num);
+
+                        const boardBox = document.getElementById(`board-num-${num}`);
+                        if (boardBox) {
+                            boardBox.classList.add('marked');
+                            boardBox.style.backgroundColor = colors[L];
+                        }
+
+                        // የታሪክ ሳጥን ላይ መደርደር
+                        const histBox = document.getElementById('history-box');
+                        const dot = document.createElement('div');
+                        dot.className = "history-dot text-white font-bold shadow-md";
+                        dot.style.backgroundColor = colors[L];
+                        dot.innerText = num;
+                        histBox.insertBefore(dot, histBox.firstChild);
+
+                        // በካርቴላዎች ላይ መምታት
+                        activeCardsData.forEach(card => {
+                            card.cells.forEach(cell => {
+                                if (cell.value === num) {
+                                    cell.element.classList.add('hit');
+                                }
+                            });
+                        });
+                    });
+
+                    // 3) የመጨረሻውን የተጠራ ቁጥር ስክሪን ላይ ማሳየት
+                    if (calledNums.length > 0) {
+                        let lastNum = calledNums[calledNums.length - 1];
+                        let lastL = lastNum <= 15 ? 'B' : lastNum <= 30 ? 'I' : lastNum <= 45 ? 'N' : lastNum <= 60 ? 'G' : 'O';
+                        const curDisp = document.getElementById('current-display');
+                        curDisp.innerText = `${lastL}-${lastNum}`;
+                        curDisp.style.color = colors[lastL];
+                    }
+                }
+            }
+        };
+
+        // እኛ ስናሸንፍ ለሰርቨሩ መልዕክት መላኪያ ህግ
+        function notifyServerWeWon(cardId, winnerData) {
+            socket.send(JSON.stringify({
+                type: 'I_WON',
+                userId: document.getElementById('tg-userid').innerText,
+                cardId: cardId,
+                winnerData: winnerData
+            }));
+        }
+
+        // የቴሌግራም ዌብ አፕሊኬሽን ማስነሻ
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        document.addEventListener("DOMContentLoaded", () => {
+            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                const user = tg.initDataUnsafe.user;
+                const displayName = user.username ?`@${user.username}` : user.first_name;
+                document.getElementById('tg-username').innerText = displayName;
+                document.getElementById('tg-userid').innerText = user.id;
+            } else {
+                // 🔑 ማሻሻያ፦ በብሮውዘር ስንሞክረው እያንዳንዱ ፔጅ የተለያየ አይዲ እንዲኖረው ሴሽን ስቶሬጅ እንጠቀማለን
+                if (!sessionStorage.getItem('mockUserId')) {
+                    const randomId = Math.floor(100000 + Math.random() * 900000); // ባለ 6 ዲጂት ራንደም ቁጥር
+                    sessionStorage.setItem('mockUserId', randomId);
+                }
+                const myMockId = sessionStorage.getItem('mockUserId');
+                document.getElementById('tg-username').innerText = `ተጫዋች_${myMockId}`;
+                document.getElementById('tg-userid').innerText = myMockId;
+            }
+        });
+
+        function switchToLobby() {
+            document.getElementById('dashboard-page').classList.remove('active-page');
+            document.getElementById('lobby-page').classList.add('active-page');
+        }  
+
+        function toggleWithdrawModal() {
+            const modal = document.getElementById('withdrawModal');
+            modal.classList.toggle('hidden');
+            if (modal.classList.contains('hidden')) {
+                selectedWithdrawMethod = '';
+                document.getElementById('withdrawFormFields').classList.add('hidden');
+                document.getElementById('withdrawAccount').value = '';
+                document.getElementById('withdrawAmount').value = '';
+                document.getElementById('btn-w-Telebirr').className = 'py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition hover:border-orange-500 cursor-pointer';
+                document.getElementById('btn-w-CBE').className = 'py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition hover:border-orange-500 cursor-pointer';
+            }
+        }function selectWithdrawBank(method) {
+            selectedWithdrawMethod = method;
+            document.getElementById('btn-w-Telebirr').className = method === 'Telebirr' ? 'py-2.5 px-3 rounded-xl border border-orange-500 bg-orange-500/10 text-xs text-center font-bold text-orange-400 cursor-pointer' : 'py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition cursor-pointer';
+            document.getElementById('btn-w-CBE').className = method === 'CBE' ? 'py-2.5 px-3 rounded-xl border border-orange-500 bg-orange-500/10 text-xs text-center font-bold text-orange-400 cursor-pointer' : 'py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition cursor-pointer';
+            document.getElementById('withdrawFormFields').classList.remove('hidden');
+        }
+
+        function handleWithdrawSubmit() {
+            const acc = document.getElementById('withdrawAccount').value.trim();
+            const amount = document.getElementById('withdrawAmount').value.trim();
+            if (!acc || !amount) {
+                alert("🚨 እባክህ ሁሉንም ሳጥኖች በትክክል ይሙሉ!");
+                return;
+            }
+            if (parseFloat(amount) < 50) {
+                alert("🚨 ማሳሰቢያ፡ ማውጣት የሚቻለው ዝቅተኛው የብር መጠን 50 ብር ነው!");
+                return;
+            }
+            alert(`✅ የብር ማውጫ ጥያቄዎ ተመዝግቧል!\nባንክ፡ ${selectedWithdrawMethod}\nአካውንት/ስልክ፡ ${acc}\nየብር መጠን፡ ${amount} ETB`);
+            toggleWithdrawModal();
+        }
+
+        let selectedBankMethod = '';
+        const mockAdminAccounts = {
+            Telebirr: "0970037014 (ካሽ ቢንጎ አድሚን)",
+            CBE: "1000305052322 (ካሽ ቢንጎ ኃ/የተ/የግ/ማህበር)"
+        };
+
+        function toggleDepositModal() {
+            const modal = document.getElementById('depositModal');
+            modal.classList.toggle('hidden');
+            if (modal.classList.contains('hidden')) {
+                selectedBankMethod = '';
+                document.getElementById('accountDisplayBox').classList.add('hidden');
+                document.getElementById('depositFormFields').classList.add('hidden');
+                document.getElementById('depositAmount').value = '';
+                document.getElementById('depositSMS').value = '';
+                document.getElementById('btn-Telebirr').className = 'py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition hover:border-yellow-500 cursor-pointer';
+                document.getElementById('btn-CBE').className = 'py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition hover:border-yellow-500 cursor-pointer';
+            }
+        }
+
+        function selectBank(method) {
+            selectedBankMethod = method;
+            document.getElementById('btn-Telebirr').className = method === 'Telebirr' ? 'py-2.5 px-3 rounded-xl border border-yellow-500 bg-yellow-500/10 text-xs text-center font-bold text-yellow-400 cursor-pointer' : 'py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition cursor-pointer';
+            document.getElementById('btn-CBE').className = method === 'CBE' ? 'py-2.5 px-3 rounded-xl border border-yellow-500 bg-yellow-500/10 text-xs text-center font-bold text-yellow-400 cursor-pointer' : 'py-2.5 px-3 rounded-xl border border-gray-600 bg-gray-800 text-xs text-center font-bold transition cursor-pointer';
+            document.getElementById('adminAccountDetails').innerText = mockAdminAccounts[method];
+            document.getElementById('accountDisplayBox').classList.remove('hidden');
+            document.getElementById('depositFormFields').classList.remove('hidden');
+        }
+
+        function handleDepositSubmit() {
+            const amount = document.getElementById('depositAmount').value.trim();const smsText = document.getElementById('depositSMS').value.trim();
+            if (!amount || !smsText) {
+                alert("🚨 እባክህ ሁሉንም ሳጥኖች በትክክል ይሙሉ!");
+                return;
+            }
+            alert(`✅ መረጃው ተመዝግቧል!\nየተመረጠው ባንክ፡ ${selectedBankMethod}\nየብር መጠን፡ ${amount}`);
+            toggleDepositModal();
+        }
+
+        // --- 🎮 የጨዋታ ተለዋዋጮች ---
+        let selectedCards = []; 
+        let calledNums = [];
+        const colors = { B: '#3b82f6', I: '#ef4444', N: '#10b981', G: '#f59e0b', O: '#a855f7' };
+        let activeCardsData = []; 
+        const allFixedCards = {}; 
+        let selectedWithdrawMethod = '';
+
+        // ለ 600 ካርቴላዎች ቋሚ ቁጥሮችን አስቀድሞ መፍጠሪያ
+        function generateAllFixedCards() {
+            for (let id = 1; id <= 600; id++) {
+                let matrix = Array(5).fill(null).map(() => Array(5).fill(0));
+                for (let col = 0; col < 5; col++) {
+                    let min = (col * 15) + 1;
+                    let pool = [];
+                    for (let n = 0; n < 15; n++) { pool.push(min + n); }
+                    
+                    for (let i = pool.length - 1; i > 0; i--) {
+                        let seed = Math.sin(id * 100 + col * 10 + i) * 10000;
+                        let j = Math.floor(Math.abs(seed) % (i + 1));
+                        let temp = pool[i]; pool[i] = pool[j]; pool[j] = temp;
+                    }
+                    for (let row = 0; row < 5; row++) { matrix[row][col] = pool[row]; }
+                }
+                matrix[2][2] = "FREE";
+                allFixedCards[id] = matrix;
+            }
+        }
+        generateAllFixedCards();
+
+        // LAZY RENDERING FOR LOBBY BUTTONS
+        const container = document.getElementById('card-container');
+        let currentRenderedCount = 0;
+        const batchSize = 80;
+
+        function renderNextBatch() {
+            const target = Math.min(currentRenderedCount + batchSize, 600);
+            for (let i = currentRenderedCount + 1; i <= target; i++) {
+                const card = document.createElement('div');
+                card.className = "card-item";
+                card.innerText = i;
+                card.id = `lobby-card-btn-${i}`;
+                card.onclick = () => {
+                    if (selectedCards.includes(i)) {
+                        card.classList.remove('selected');
+                        selectedCards = selectedCards.filter(id => id !== i);
+                    } else {
+                        if (selectedCards.length >= 4) {
+                            alert("ማሳሰቢያ፡ መጫወት የሚችሉት ቢበዛ 4 ካርቴላዎች ብቻ ነው!");
+                            return;
+                        }
+                        card.classList.add('selected');
+                        selectedCards.push(i);
+                    }
+                    document.getElementById('selected-count-display').innerText = `${selectedCards.length}/4`;
+                    updateLobbyPreview();
+                };
+                container.appendChild(card);
+            }
+            currentRenderedCount = target;
+        }
+        renderNextBatch();
+        renderNextBatch();
+
+        const scrollContainer = document.getElementById('lobby-scroll-container');
+        scrollContainer.onscroll = () => {
+            if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 100) {
+                if (currentRenderedCount < 600) { renderNextBatch(); }
+            }
+        };
+
+        // ሎቢ ላይ የተመረጡትን ካርቴላዎች ማሳያ ቅድመ-እይታ
+        function updateLobbyPreview() {
+    const previewArea = document.getElementById('lobby-preview-area');
+    previewArea.innerHTML = "";
+    
+    // 🔑 ማሻሻያ፦ የመረጥናቸውን ጠቅላላ ካርቴላዎች ዝርዝር (Array) ለሰርቨሩ መላክ
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        const myId = document.getElementById('tg-userid').innerText || "123456789";
+        socket.send(JSON.stringify({
+            type: 'SAVE_MY_CARDS',
+            userId: myId,
+            cardIds: selectedCards // የካርቴላዎች ዝርዝር አሬይ
+        }));
+    }
+
+    if (selectedCards.length === 0) {
+        previewArea.innerHTML = `<p id="no-cards-msg" class="text-xs text-gray-500 italic text-center py-4">እባክህ ከላይ ካርቴላ ስትመርጥ እዚህ ጋር ዝርዝሩ ይታያል</p>`;
+        return;
+    }
+    // ... ቀሪው የቅድመ-እይታ ኮድ (gridWrapper...) እንዳለ ይቀጥላል
+
+            const gridWrapper = document.createElement('div');
+            gridWrapper.className = "grid grid-cols-2 gap-2 mt-1";
+            previewArea.appendChild(gridWrapper);
+
+            selectedCards.forEach(id => {
+                const singleCardBox = document.createElement('div');
+                singleCardBox.className = "flex flex-col bg-[#141625] p-1 rounded border border-gray-700";
+                
+                const label = document.createElement('div');
+                label.className = "text-[8px] text-orange-400 font-bold ml-1 mb-0.5";
+                label.innerText = `CARD #${id}`;
+                singleCardBox.appendChild(label);
+
+                const headerGrid = document.createElement('div');
+                headerGrid.className = "grid grid-cols-5 text-center font-bold text-[7px] bg-[#24273d] py-0.5 rounded-t-sm";
+                headerGrid.innerHTML = `<div class="text-blue-500">B</div><div class="text-red-500">I</div><div class="text-green-500">N</div><div class="text-orange-500">G</div><div class="text-purple-500">O</div>`;
+                singleCardBox.appendChild(headerGrid);
+
+                const grid = document.createElement('div');
+                grid.className = "player-card mb-0";
+                let flatMatrix = allFixedCards[id];
+                
+                for (let row = 0; row < 5; row++) {
+                    for (let col = 0; col < 5; col++) {
+                        const cell = document.createElement('div');
+                        let val = flatMatrix[row][col];
+                        cell.className = "card-cell text-[7px]";
+                        if (val === "FREE") {
+                            cell.className += " bg-orange-700 text-white font-bold free-style";
+                            cell.innerText = "FREE";
+                        } else {
+                            cell.innerText = val;
+                        }
+                        grid.appendChild(cell);
+                    }
+                }
+                singleCardBox.appendChild(grid);
+                gridWrapper.appendChild(singleCardBox);
+            });
+        }
+
+        function resetGameToLobby() {
+    // 🔑 ማሻሻያ፦ ሁለቱንም የጨዋታ እና የአሸናፊ ገጾች ከስክሪን ማጥፋት
+    document.getElementById('winner-page').classList.remove('active-page');
+    document.getElementById('game-page').classList.remove('active-page');
+    
+    // ወደ ሎቢ ገፅ መመለስ
+    document.getElementById('lobby-page').classList.add('active-page');
+
+    selectedCards = [];
+    calledNums = []; 
+    activeCardsData = [];
+    
+    document.getElementById('selected-count-display').innerText = "0/4";
+    document.getElementById('lobby-timer').innerText = "15";
+    document.getElementById('history-box').innerHTML = "";
+    document.getElementById('current-display').innerText = "--";
+    document.getElementById('call-count').innerText = "0";
+    
+    document.querySelectorAll('.number-box').forEach(box => { box.className = "number-box"; });
+    document.querySelectorAll('.card-item').forEach(card => { card.classList.remove('selected'); });
+    
+    updateLobbyPreview();
+}
+
+        // --- 🎮 ወደ ጨዋታ ገፅ መሻገሪያ ፈንክሽን ---
+        function switchToGame() {
+            document.getElementById('lobby-page').classList.remove('active-page');
+            document.getElementById('game-page').classList.add('active-page');
+            initGameBoard();
+        }// Horizontal iterative matrix generator algorithm loops logic directly
+        function initGameBoard() {
+            const board = document.getElementById('main-board');
+            board.innerHTML = "";
+            
+            // 🔑 ማስተካከያ፦ በB ስር ከ1-15፣ በI ስር ከ16-30... እያለ ቁልቁል እንዲደረደሩ ማድረግ
+            for (let r = 0; r < 15; r++) {
+                const columnsOffsets = [0, 15, 30, 45, 60];
+                for (let c = 0; c < 5; c++) {
+                    const currentNum = columnsOffsets[c] + r + 1;
+                    
+                    const box = document.createElement('div');
+                    box.className = "number-box";
+                    box.innerText = currentNum;
+                    box.id = `board-num-${currentNum}`;
+                    board.appendChild(box);
+                }
+            }
+
+            const scrollArea = document.getElementById('cards-scroll-area');
+            scrollArea.innerHTML = "";
+            activeCardsData = [];
+
+            selectedCards.forEach(id => {
+                const cardWrapper = document.createElement('div');
+                cardWrapper.className = "mb-1.5 bg-[#1a1c2c] p-2 rounded-xl border border-gray-800 relative shadow-md";
+                cardWrapper.innerHTML = `
+                    <div class="flex justify-between items-center mb-1 px-1">
+                        <span class="text-[10px] font-black text-orange-400">CARD #${id}</span>
+                        <span id="win-status-${id}" class="text-[8px] font-bold text-gray-500 uppercase tracking-wider">In Play</span>
+                    </div>
+                    <div class="grid grid-cols-5 text-center font-bold text-[8px] bg-[#24273d] py-0.5 rounded-t mb-0.5">
+                        <div class="text-blue-500">B</div><div class="text-red-500">I</div><div class="text-green-500">N</div><div class="text-orange-500">G</div><div class="text-purple-500">O</div>
+                    </div>
+                `;
+
+                const grid = document.createElement('div');
+                grid.className = "player-card mb-0";
+                const matrix = allFixedCards[id];
+                const flatCells = [];
+
+                for (let r = 0; r < 5; r++) {
+                    for (let c = 0; c < 5; c++) {
+                        const cell = document.createElement('div');
+                        let val = matrix[r][c];
+                        cell.className = "card-cell text-[10px] p-0.5";
+                        if (val === "FREE") {
+                            cell.className += " free-style";
+                            cell.innerText = "FREE";
+                        } else {
+                            cell.innerText = val;
+                        }
+                        grid.appendChild(cell);
+                        flatCells.push({ value: val, element: cell, row: r, col: c });
+                    }
+                }
+                cardWrapper.appendChild(grid);
+                scrollArea.appendChild(cardWrapper);
+
+                activeCardsData.push({ id: id, cells: flatCells, hasWon: false });
+            });
+        }
+
+        // ከሰርቨር አዲስ ቁጥር ሲመጣ ማስተናገጃ
+        function handleIncomingNumber(number, letter) {
+            calledNums.push(number);
+            document.getElementById('call-count').innerText = calledNums.length;
+
+            const curDisp = document.getElementById('current-display');
+            curDisp.innerText = `${letter}-${number}`;
+            curDisp.style.color = colors[letter];
+
+            document.querySelectorAll('.number-box').forEach(b => b.classList.remove('current-anim'));
+            const boardBox = document.getElementById(`board-num-${number}`);
+            if (boardBox) {
+                boardBox.classList.add('marked', 'current-anim');
+                boardBox.style.backgroundColor = colors[letter];
+            }
+
+            const histBox = document.getElementById('history-box');
+            const dot = document.createElement('div');
+            dot.className = "history-dot text-white font-bold shadow-md";
+            dot.style.backgroundColor = colors[letter];
+            dot.innerText = number;
+            histBox.insertBefore(dot, histBox.firstChild);
+
+            // የተጫዋቹን ካርቴላዎች መፈተሽ
+            activeCardsData.forEach(card => {
+                if (card.hasWon) return;
+                card.cells.forEach(cell => {
+                    if (cell.value === number) {
+                        cell.element.classList.add('hit');
+                    }
+                });
+                checkBingoWinners(card);
+            });
+        }
+
+        // Checks active cards algorithms criteria lines pattern matches
+        function checkBingoWinners(card) {
+            if (card.hasWon) return;
+
+            const matrix2D = Array(5).fill(null).map(() => Array(5).fill(false));
+            card.cells.forEach((cell, idx) => {
+                const r = Math.floor(idx / 5);
+                const c = idx % 5;
+                if (cell.value === "FREE" || calledNums.includes(cell.value)) {
+                    matrix2D[r][c] = true;
+                }
+            });
+
+            let isWinner = false;
+
+            // 1. Horizontal validations loops
+            for (let r = 0; r < 5; r++) {
+                if (matrix2D[r][0] && matrix2D[r][1] && matrix2D[r][2] && matrix2D[r][3] && matrix2D[r][4]) isWinner = true;
+            }
+            // 2. Vertical validations loops
+            for (let c = 0; c < 5; c++) {
+                if (matrix2D[0][c] && matrix2D[1][c] && matrix2D[2][c] && matrix2D[3][c] && matrix2D[4][c]) isWinner = true;
+            }
+            // 3. Diagonal validations loops
+            if (matrix2D[0][0] && matrix2D[1][1] && matrix2D[2][2] && matrix2D[3][3] && matrix2D[4][4]) isWinner = true;
+            if (matrix2D[0][4] && matrix2D[1][3] && matrix2D[2][2] && matrix2D[3][1] && matrix2D[4][0]) isWinner = true;
+
+            if (isWinner) {
+                card.hasWon = true;
+                document.getElementById(`win-status-${card.id}`).className = "text-[9px] font-black text-green-400 uppercase tracking-wider animate-pulse";
+                document.getElementById(`win-status-${card.id}`).innerText = "WINNER!!";
+
+                // 🔑 የቦነስ ስሌቶች መጀመርያ፦
+                let bonusesWon = [];
+                const lastCalledNum = calledNums[calledNums.length - 1]; // ያሸነፈበት የመጨረሻ ቁጥር
+
+                // 1️⃣ ቦነስ 1፦ በፍጥነት ላሸነፈ (ከተጠሩት ቁጥሮች ብዛት አንጻር - ለምሳሌ በ15 ቁጥር ወይም ከዚያ በታች)
+                if (calledNums.length <= 15) {
+                    bonusesWon.push("⚡ Fast Bingo Bonus");
+                }
+
+                // 2️⃣ ቦነስ 2፦ በያዘው ካርቴላ ቁጥር ሲያሸነፍ (የካርቴላ ID እና የመጨረሻው ቁጥር እኩል ሲሆኑ)
+                if (Number(card.id) === Number(lastCalledNum)) {
+                    bonusesWon.push("🎯 Card ID Match Bonus");
+                }
+
+                // 3️⃣ ቦነስ 3፦ በእለቱ ቀን ቁጥር አሸናፊ ሲሆን (የዛሬው የኢትዮጵያ ቀን 21 ስለሆነ)
+                const ethioDate = 21; // ዛሬ 21 ቀን ነው
+                if (Number(lastCalledNum) === ethioDate) {
+                    bonusesWon.push("📅 Lucky Date Bonus");
+                }
+
+                // ለሙከራ ያህል ቦነሶቹን በኮንሶል ላይ እናያለን
+                console.log(`ካርቴላ #${card.id} ያሸነፋቸው ቦነሶች፦, bonusesWon`);
+
+                // መረጃውን ወደ ሰርቨሩ መላክ (ቦነሶቹን ጨምሮ)
+                notifyServerWeWon(card.id, card.cells.map(c => c.value));
+            }
+        }
+
+       // Triggers UI shifts onto validation victory panels overlays nodes
+        function showWinnerScreen(cardId) {
+            document.getElementById('game-page').classList.remove('active-page');
+            document.getElementById('winner-page').classList.add('active-page');
+
+            const displayArea = document.getElementById('winner-card-display');
+            displayArea.innerHTML = "";
+
+            const cardClone = document.createElement('div');
+            cardClone.className = "bg-[#1a1c2c] p-3 rounded-2xl border-2 border-yellow-500 shadow-2xl w-52 max-w-full mx-auto relative";
+            cardClone.innerHTML = `
+                <p class="text-center text-sm font-black text-yellow-400 mb-1">CARD #${cardId}</p>
+                <div class="grid grid-cols-5 text-center font-bold text-[8px] bg-[#24273d] py-0.5 rounded-t mb-0.5">
+                    <div class="text-blue-500">B</div><div class="text-red-500">I</div><div class="text-green-500">N</div><div class="text-orange-500">G</div><div class="text-purple-500">O</div>
+                </div>
+           ` ;
+
+            const grid = document.createElement('div');
+            grid.className = "player-card mb-0 grid grid-cols-5 gap-1";
+            
+            const matrix = allFixedCards[cardId];
+
+            for (let r = 0; r < 5; r++) {
+                for (let c = 0; c < 5; c++) {
+                    const cell = document.createElement('div');
+                    let val = matrix ? matrix[r][c] : "??";
+                    
+                    cell.className = "card-cell text-[10px] p-1 font-bold";
+                    
+                    if (val === "FREE") {
+                        cell.className += " free-style hit";
+                        cell.innerText = "FREE";
+                    } else {
+                        cell.innerText = val;
+                        if (calledNums.includes(val)) {
+                            cell.className += " hit";
+                        }
+                    }
+                    grid.appendChild(cell);
+                }
+            }
+            cardClone.appendChild(grid);
+            displayArea.appendChild(cardClone);
+
+            // 🔑 የቦነስ ማሳያ ክፍል - አዲሱ የብር መጠን እና የጥሪ ገደብ ስሌት
+            const bonusArea = document.createElement('div');
+            bonusArea.className = "mt-4 w-full flex flex-col gap-1.5 items-center justify-center px-4 animate-bounce";
+            
+            let hasBonus = false;
+            const lastCalledNum = calledNums[calledNums.length - 1];
+
+            // 1️⃣ Fast Bingo Bonus: ከ30 ጥሪ በታች ሲሆን +500 ብር
+            if (calledNums.length < 30) {
+                createBonusBadge(bonusArea, "⚡ FAST BINGO BONUS", "+500 BIRR");
+                hasBonus = true;
+            }
+            
+            // 2️⃣ Card ID Match Bonus: የካርቴላ ቁጥርና የመጨረሻ ቁጥር እኩል ሲሆኑ +300 ብር
+            if (Number(cardId) === Number(lastCalledNum)) {
+                createBonusBadge(bonusArea, "🎯 CARD ID MATCH", "+300 BIRR");
+                hasBonus = true;
+            }
+            
+            // 3️⃣ Lucky Date Bonus: የመጨረሻው ቁጥር 21 (የእለቱ ቀን) ሲሆን +300 ብር
+            const ethioDate = 21;
+            if (Number(lastCalledNum) === ethioDate) {
+                createBonusBadge(bonusArea, "📅 LUCKY DATE BONUS", "+300 BIRR");
+                hasBonus = true;
+            }
+
+            if (hasBonus) {
+                displayArea.appendChild(bonusArea);
+            }
+
+            // ከ 4 ሰከንድ በኋላ ወደ ሎቢ መመለሻ
+            setTimeout(() => {
+                resetGameToLobby();
+            }, 4000);
+        }
+
+        // 🛠️ የቦነስ ባጆችን ለመስራት የሚያግዝ ረዳት ፈንክሽን
+        function createBonusBadge(container, title, amount) {
+            const badge = document.createElement('div');
+            badge.className = "bg-gradient-to-r from-yellow-500 to-amber-600 text-black rounded-xl p-2 shadow-lg border border-yellow-300 w-full max-w-[220px] flex justify-between items-center px-3";badge.innerHTML = `
+                <span class="text-[9px] font-black tracking-wider uppercase">${title}</span>
+                <span class="bg-black text-yellow-400 text-[10px] font-black px-2 py-0.5 rounded-md shadow">${amount}</span>
+            `;
+            container.appendChild(badge);
+        }
+    </script>
+</body>
+</html>
